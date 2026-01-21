@@ -4,20 +4,24 @@ LDFLAGS =
 
 SRC_DIR = src
 BIN_DIR = bin
+INC_DIR = include
 
 TARGET_DATETIME = $(BIN_DIR)/benchmark
 TARGET_DICT = $(BIN_DIR)/benchmark_dict
 TARGET_CONSOLE = $(BIN_DIR)/benchmark_console
+TARGET_DICT_EXAMPLE = $(BIN_DIR)/dict_example
 
-.PHONY: all clean datetime dict console run run-dict run-console
+.PHONY: all clean datetime dict console dict-example run run-dict run-console run-dict-example
 
-all: datetime dict console
+all: datetime dict console dict-example
 
 datetime: $(TARGET_DATETIME)
 
 dict: $(TARGET_DICT)
 
 console: $(TARGET_CONSOLE)
+
+dict-example: $(TARGET_DICT_EXAMPLE)
 
 $(TARGET_DATETIME): $(SRC_DIR)/benchmark.c | $(BIN_DIR)
 	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS)
@@ -27,6 +31,9 @@ $(TARGET_DICT): $(SRC_DIR)/benchmark_dict.c | $(BIN_DIR)
 
 $(TARGET_CONSOLE): $(SRC_DIR)/benchmark_console.c | $(BIN_DIR)
 	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS)
+
+$(TARGET_DICT_EXAMPLE): $(SRC_DIR)/dict_example.c $(INC_DIR)/dict.h | $(BIN_DIR)
+	$(CC) $(CFLAGS) -I$(INC_DIR) -o $@ $(SRC_DIR)/dict_example.c $(LDFLAGS)
 
 $(BIN_DIR):
 	mkdir -p $(BIN_DIR)
@@ -42,3 +49,6 @@ run-dict: $(TARGET_DICT)
 
 run-console: $(TARGET_CONSOLE)
 	./$(TARGET_CONSOLE)
+
+run-dict-example: $(TARGET_DICT_EXAMPLE)
+	./$(TARGET_DICT_EXAMPLE)
