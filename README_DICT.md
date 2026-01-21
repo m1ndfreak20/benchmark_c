@@ -199,6 +199,69 @@ Typical dictionary performance in other languages (approximate):
 
 ---
 
+---
+
+## Generic Dictionary Benchmark (dict.h)
+
+Benchmarks for the generic header-only `dict.h` library using Robin Hood hashing + DJB2/integer hash functions.
+
+**Run:**
+```bash
+make dict-generic
+./bin/benchmark_dict_generic
+```
+
+### Summary Table (100,000 iterations)
+
+| Type | Insert | Get | Contains (hit) | Contains (miss) |
+|------|-------:|----:|---------------:|----------------:|
+| string -> int | 169.78 | 123.75 | 149.52 | 288.82 |
+| string -> double | 159.25 | 138.33 | 153.58 | 240.46 |
+| int -> int | 109.84 | 59.52 | 72.09 | 112.32 |
+| int -> double | 54.34 | 98.33 | 67.35 | 71.57 |
+| uint32 -> int | 78.68 | 56.27 | 52.17 | 102.02 |
+| uint64 -> int | 62.84 | 93.08 | 85.79 | 53.21 |
+| void* -> int | 150.64 | 92.26 | 119.61 | 125.24 |
+
+*All times in nanoseconds per operation*
+
+### Key Insights
+
+- **Integer keys are fastest**: `uint32 -> int` and `uint64 -> int` show the best performance
+- **String keys have overhead**: Hash computation for strings takes ~2-3x longer
+- **Contains (miss) slower**: Missing keys require full probe sequence traversal
+- **Pointer keys comparable to integers**: Similar performance to integer hash
+
+### Detailed Results by Type
+
+#### Dict<string, int>
+| Operation | Time (ns) |
+|-----------|----------:|
+| Insert | 329.82 |
+| Get (hit) | 168.20 |
+| Contains (hit) | 165.64 |
+| Contains (miss) | 277.97 |
+| Remove | 209.98 |
+
+#### Dict<int, int>
+| Operation | Time (ns) |
+|-----------|----------:|
+| Insert | 84.34 |
+| Get (hit) | 90.34 |
+| Contains (hit) | 52.30 |
+| Contains (miss) | 97.22 |
+| Remove | 56.00 |
+
+#### Dict<uint64_t, int>
+| Operation | Time (ns) |
+|-----------|----------:|
+| Insert | 34.95 |
+| Get (hit) | 51.42 |
+| Contains (hit) | 55.74 |
+| Contains (miss) | 67.72 |
+
+---
+
 ## License
 
 Public Domain / MIT
