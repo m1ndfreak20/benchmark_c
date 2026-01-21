@@ -6,7 +6,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#define ITERATIONS 1000000
+#define ITERATIONS 65535
 #define WARMUP_ITERATIONS 10000
 #define INITIAL_CAPACITY 16
 #define LOAD_FACTOR 0.75

@@ -33,27 +33,27 @@ make run-dict
 ## Benchmark Results
 
 **System:** AMD EPYC-Rome Processor  
-**Iterations:** 1,000,000  
-**Capacity:** 2,000,000 (load factor ~50%)
+**Iterations:** 65,535  
+**Capacity:** 131,070 (load factor ~50%)
 
 ### Hash Table Implementation Comparison
 
 | Implementation | Insert | Contains Hit | Contains Miss | Get Hit | Get Miss | Remove |
 |----------------|--------|--------------|---------------|---------|----------|--------|
-| chain_linked_list | 208.70 | 62.10 | 195.54 | 20.55 | 173.65 | 40.20 |
-| open_linear_probe | 93.76 | 49.67 | 339.78 | 45.31 | 301.50 | 32.34 |
-| **robin_hood** | **68.76** | **4.77** | **15.77** | **3.93** | **12.39** | 45.94 |
+| chain_linked_list | 172.21 | 30.96 | 188.84 | 16.37 | 123.08 | 69.78 |
+| open_linear_probe | 131.82 | 132.83 | 291.23 | 92.25 | 311.32 | 50.30 |
+| **robin_hood** | **66.78** | **4.47** | **10.65** | **3.49** | **11.28** | **61.49** |
 
 *All times in nanoseconds per operation*
 
 #### Winner: Robin Hood Hashing
 
 Robin Hood hashing is the clear winner for most operations:
-- **13x faster** for Contains Hit (4.77 ns vs 62.10 ns)
-- **12x faster** for Contains Miss (15.77 ns vs 195.54 ns)
-- **5x faster** for Get Hit (3.93 ns vs 20.55 ns)
-- **14x faster** for Get Miss (12.39 ns vs 173.65 ns)
-- **3x faster** for Insert (68.76 ns vs 208.70 ns)
+- **7x faster** for Contains Hit (4.47 ns vs 30.96 ns)
+- **18x faster** for Contains Miss (10.65 ns vs 188.84 ns)
+- **5x faster** for Get Hit (3.49 ns vs 16.37 ns)
+- **11x faster** for Get Miss (11.28 ns vs 123.08 ns)
+- **2.6x faster** for Insert (66.78 ns vs 172.21 ns)
 
 ---
 
@@ -61,19 +61,19 @@ Robin Hood hashing is the clear winner for most operations:
 
 | Hash Function | Insert | Contains Hit | Contains Miss | Get Hit | Get Miss | Remove |
 |---------------|--------|--------------|---------------|---------|----------|--------|
-| **hash_djb2** | **62.48** | **20.54** | 154.25 | **21.72** | 169.95 | **41.42** |
-| hash_fnv1a | 214.39 | 77.28 | 155.82 | 77.88 | **148.36** | 196.17 |
-| hash_sdbm | 81.08 | 46.92 | 204.87 | 44.43 | 191.53 | 69.04 |
-| hash_murmur3_simple | 223.45 | 117.31 | 239.45 | 120.82 | 260.51 | 218.75 |
+| **hash_djb2** | **45.35** | **14.91** | 69.89 | 29.60 | 49.51 | **32.20** |
+| hash_fnv1a | 85.58 | 28.50 | 63.00 | 31.98 | 84.95 | 47.90 |
+| hash_sdbm | 43.35 | 17.91 | **42.16** | **16.28** | **36.85** | 35.89 |
+| hash_murmur3_simple | 62.81 | 34.94 | 73.89 | 42.79 | 69.58 | 58.69 |
 
 *All times in nanoseconds per operation*
 
-#### Winner: DJB2
+#### Winner: DJB2 / SDBM
 
-DJB2 hash function is fastest for most operations:
-- Simple implementation
-- Good distribution for string keys
-- Widely used and battle-tested
+DJB2 and SDBM hash functions show the best performance:
+- DJB2: Best for Insert and Contains Hit
+- SDBM: Best for Contains Miss, Get Hit, Get Miss
+- Both are simple and fast implementations
 
 ---
 
@@ -81,11 +81,11 @@ DJB2 hash function is fastest for most operations:
 
 | Load Factor | Insert | Contains Hit | Contains Miss | Get Hit | Get Miss | Remove |
 |-------------|--------|--------------|---------------|---------|----------|--------|
-| ~10% | 35.38 | 12.97 | 96.93 | 17.72 | 56.73 | 29.80 |
-| ~25% | 48.76 | 13.27 | 72.80 | 13.17 | 39.83 | 32.69 |
-| **~50%** | **61.28** | **27.00** | **57.44** | **14.87** | **47.73** | **31.79** |
-| ~75% | 51.93 | 14.70 | 48.17 | 15.10 | 51.14 | 64.74 |
-| ~90% | 45.67 | 12.44 | 56.22 | 11.96 | 92.43 | 28.94 |
+| ~10% | 117.44 | 14.29 | 78.85 | 12.77 | 40.37 | 28.55 |
+| ~25% | 80.81 | 18.85 | 52.34 | 13.54 | 55.13 | 49.49 |
+| **~50%** | **61.36** | **15.02** | **47.93** | **15.63** | **41.93** | **32.42** |
+| ~75% | 41.53 | 16.84 | 49.84 | 14.53 | 59.03 | 38.40 |
+| ~90% | 45.92 | 11.87 | 50.11 | 16.19 | 85.04 | 31.00 |
 
 *All times in nanoseconds per operation*
 
@@ -100,12 +100,12 @@ DJB2 hash function is fastest for most operations:
 
 | Key Length | Insert | Contains Hit | Get Hit |
 |------------|--------|--------------|---------|
-| 8 chars | 42.81 | 14.04 | 14.52 |
-| 16 chars | 43.20 | 20.06 | 20.78 |
-| 32 chars | 56.86 | 35.87 | 32.47 |
-| 64 chars | 102.10 | 90.95 | 73.20 |
-| 128 chars | 181.37 | 126.06 | 134.28 |
-| 256 chars | 300.45 | 314.50 | 295.86 |
+| 8 chars | 69.34 | 14.43 | 15.62 |
+| 16 chars | 61.81 | 18.37 | 20.12 |
+| 32 chars | 87.16 | 35.05 | 33.66 |
+| 64 chars | 121.75 | 92.63 | 63.60 |
+| 128 chars | 279.61 | 142.75 | 140.68 |
+| 256 chars | 1000.25 | 429.52 | 292.74 |
 
 *All times in nanoseconds per operation*
 
@@ -190,7 +190,7 @@ Typical dictionary performance in other languages (approximate):
 
 | Language | Contains (ns) | Insert (ns) | Notes |
 |----------|--------------|-------------|-------|
-| **C (Robin Hood)** | **4-16** | **69** | This benchmark |
+| **C (Robin Hood)** | **4-11** | **67** | This benchmark |
 | C++ std::unordered_map | 30-50 | 100-150 | Depends on implementation |
 | Rust HashMap | 20-40 | 80-120 | FxHash is faster |
 | Go map | 40-80 | 100-200 | Runtime overhead |
