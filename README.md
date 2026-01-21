@@ -1,3 +1,29 @@
+# C Benchmarks for Linux x64
+
+This repository contains benchmark suites for common C operations on Linux x64.
+
+## Available Benchmarks
+
+| Benchmark | File | Description |
+|-----------|------|-------------|
+| [DateTime String](README_DATETIME.md) | `benchmark` | 40 methods for datetime string formatting |
+| [Dictionary Operations](README_DICT.md) | `benchmark_dict` | Hash table implementations and operations |
+
+## Quick Build & Run
+
+```bash
+# Build all
+make all
+
+# Run datetime benchmark
+./bin/benchmark
+
+# Run dictionary benchmark  
+./bin/benchmark_dict
+```
+
+---
+
 # DateTime String Benchmark (C/Linux x64)
 
 Benchmark suite comparing 40 different methods for generating datetime strings in the format `[ HH:MM:SS:mmm.uuu ]` (hours:minutes:seconds:milliseconds.microseconds).
@@ -5,7 +31,7 @@ Benchmark suite comparing 40 different methods for generating datetime strings i
 ## Build
 
 ```bash
-make
+make datetime
 ```
 
 ## Run

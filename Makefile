@@ -5,16 +5,22 @@ LDFLAGS =
 SRC_DIR = src
 BIN_DIR = bin
 
-TARGET = $(BIN_DIR)/benchmark
+TARGET_DATETIME = $(BIN_DIR)/benchmark
+TARGET_DICT = $(BIN_DIR)/benchmark_dict
 
-SRCS = $(wildcard $(SRC_DIR)/*.c)
+.PHONY: all clean datetime dict run run-dict
 
-.PHONY: all clean
+all: datetime dict
 
-all: $(TARGET)
+datetime: $(TARGET_DATETIME)
 
-$(TARGET): $(SRCS) | $(BIN_DIR)
-	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+dict: $(TARGET_DICT)
+
+$(TARGET_DATETIME): $(SRC_DIR)/benchmark.c | $(BIN_DIR)
+	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS)
+
+$(TARGET_DICT): $(SRC_DIR)/benchmark_dict.c | $(BIN_DIR)
+	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS)
 
 $(BIN_DIR):
 	mkdir -p $(BIN_DIR)
@@ -22,5 +28,8 @@ $(BIN_DIR):
 clean:
 	rm -rf $(BIN_DIR)
 
-run: $(TARGET)
-	./$(TARGET)
+run: $(TARGET_DATETIME)
+	./$(TARGET_DATETIME)
+
+run-dict: $(TARGET_DICT)
+	./$(TARGET_DICT)
