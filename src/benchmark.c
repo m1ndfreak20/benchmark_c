@@ -258,6 +258,37 @@ void bench_cached_localtime(char *buf, size_t size) {
 }
 
 // ============================================================================
+// Benchmark 9b: Non-cached localtime (always call localtime_r)
+// ============================================================================
+void bench_nocache_localtime(char *buf, size_t size) {
+    (void)size;
+    struct timeval tv;
+    struct tm tm_info;
+    gettimeofday(&tv, NULL);
+    localtime_r(&tv.tv_sec, &tm_info);
+    
+    int ms = tv.tv_usec / 1000;
+    int us = tv.tv_usec % 1000;
+    
+    buf[0] = '[';
+    buf[1] = ' ';
+    memcpy(buf + 2, digit_pairs + tm_info.tm_hour * 2, 2);
+    buf[4] = ':';
+    memcpy(buf + 5, digit_pairs + tm_info.tm_min * 2, 2);
+    buf[7] = ':';
+    memcpy(buf + 8, digit_pairs + tm_info.tm_sec * 2, 2);
+    buf[10] = ':';
+    buf[11] = '0' + ms / 100;
+    memcpy(buf + 12, digit_pairs + (ms % 100) * 2, 2);
+    buf[14] = '.';
+    buf[15] = '0' + us / 100;
+    memcpy(buf + 16, digit_pairs + (us % 100) * 2, 2);
+    buf[18] = ' ';
+    buf[19] = ']';
+    buf[20] = '\0';
+}
+
+// ============================================================================
 // Benchmark 10: Pre-formatted template with direct copy
 // ============================================================================
 void bench_template_copy(char *buf, size_t size) {
@@ -401,6 +432,37 @@ void bench_cached_gmtime(char *buf, size_t size) {
 }
 
 // ============================================================================
+// Benchmark 14b: Non-cached gmtime (always call gmtime_r)
+// ============================================================================
+void bench_nocache_gmtime(char *buf, size_t size) {
+    (void)size;
+    struct timeval tv;
+    struct tm tm_info;
+    gettimeofday(&tv, NULL);
+    gmtime_r(&tv.tv_sec, &tm_info);
+    
+    int ms = tv.tv_usec / 1000;
+    int us = tv.tv_usec % 1000;
+    
+    buf[0] = '[';
+    buf[1] = ' ';
+    memcpy(buf + 2, digit_pairs + tm_info.tm_hour * 2, 2);
+    buf[4] = ':';
+    memcpy(buf + 5, digit_pairs + tm_info.tm_min * 2, 2);
+    buf[7] = ':';
+    memcpy(buf + 8, digit_pairs + tm_info.tm_sec * 2, 2);
+    buf[10] = ':';
+    buf[11] = '0' + ms / 100;
+    memcpy(buf + 12, digit_pairs + (ms % 100) * 2, 2);
+    buf[14] = '.';
+    buf[15] = '0' + us / 100;
+    memcpy(buf + 16, digit_pairs + (us % 100) * 2, 2);
+    buf[18] = ' ';
+    buf[19] = ']';
+    buf[20] = '\0';
+}
+
+// ============================================================================
 // Benchmark 15: time() + gettimeofday for microseconds only
 // ============================================================================
 void bench_time_gettimeofday_hybrid(char *buf, size_t size) {
@@ -525,6 +587,37 @@ void bench_cached_full_lookup(char *buf, size_t size) {
 }
 
 // ============================================================================
+// Benchmark 18b: Non-cached localtime with full lookup tables
+// ============================================================================
+void bench_nocache_full_lookup(char *buf, size_t size) {
+    (void)size;
+    init_triples();
+    
+    struct timeval tv;
+    struct tm tm_info;
+    gettimeofday(&tv, NULL);
+    localtime_r(&tv.tv_sec, &tm_info);
+    
+    int ms = tv.tv_usec / 1000;
+    int us = tv.tv_usec % 1000;
+    
+    buf[0] = '[';
+    buf[1] = ' ';
+    memcpy(buf + 2, digit_pairs + tm_info.tm_hour * 2, 2);
+    buf[4] = ':';
+    memcpy(buf + 5, digit_pairs + tm_info.tm_min * 2, 2);
+    buf[7] = ':';
+    memcpy(buf + 8, digit_pairs + tm_info.tm_sec * 2, 2);
+    buf[10] = ':';
+    memcpy(buf + 11, digit_triples + ms * 4, 3);
+    buf[14] = '.';
+    memcpy(buf + 15, digit_triples + us * 4, 3);
+    buf[18] = ' ';
+    buf[19] = ']';
+    buf[20] = '\0';
+}
+
+// ============================================================================
 // Benchmark 19: CLOCK_REALTIME_COARSE with cached localtime
 // ============================================================================
 void bench_coarse_cached(char *buf, size_t size) {
@@ -547,6 +640,37 @@ void bench_coarse_cached(char *buf, size_t size) {
     memcpy(buf + 5, digit_pairs + cached_tm.tm_min * 2, 2);
     buf[7] = ':';
     memcpy(buf + 8, digit_pairs + cached_tm.tm_sec * 2, 2);
+    buf[10] = ':';
+    buf[11] = '0' + ms / 100;
+    memcpy(buf + 12, digit_pairs + (ms % 100) * 2, 2);
+    buf[14] = '.';
+    buf[15] = '0' + us / 100;
+    memcpy(buf + 16, digit_pairs + (us % 100) * 2, 2);
+    buf[18] = ' ';
+    buf[19] = ']';
+    buf[20] = '\0';
+}
+
+// ============================================================================
+// Benchmark 19b: CLOCK_REALTIME_COARSE without cache (always call localtime_r)
+// ============================================================================
+void bench_coarse_nocache(char *buf, size_t size) {
+    (void)size;
+    struct timespec ts;
+    struct tm tm_info;
+    clock_gettime(CLOCK_REALTIME_COARSE, &ts);
+    localtime_r(&ts.tv_sec, &tm_info);
+    
+    int ms = ts.tv_nsec / 1000000;
+    int us = (ts.tv_nsec / 1000) % 1000;
+    
+    buf[0] = '[';
+    buf[1] = ' ';
+    memcpy(buf + 2, digit_pairs + tm_info.tm_hour * 2, 2);
+    buf[4] = ':';
+    memcpy(buf + 5, digit_pairs + tm_info.tm_min * 2, 2);
+    buf[7] = ':';
+    memcpy(buf + 8, digit_pairs + tm_info.tm_sec * 2, 2);
     buf[10] = ':';
     buf[11] = '0' + ms / 100;
     memcpy(buf + 12, digit_pairs + (ms % 100) * 2, 2);
@@ -628,7 +752,7 @@ void bench_multiple_snprintf(char *buf, size_t size) {
 }
 
 // ============================================================================
-// Benchmark 23: Single memcpy with pre-computed string
+// Benchmark 23: Single memcpy with pre-computed string (cached)
 // ============================================================================
 static char precomputed_time[32] = "[ 00:00:00:000.000 ]";
 static time_t precomputed_sec = 0;
@@ -654,6 +778,34 @@ void bench_precomputed_memcpy(char *buf, size_t size) {
     int us = tv.tv_usec % 1000;
     
     memcpy(buf, precomputed_time, 21);
+    buf[11] = '0' + ms / 100;
+    buf[12] = '0' + (ms / 10) % 10;
+    buf[13] = '0' + ms % 10;
+    buf[15] = '0' + us / 100;
+    buf[16] = '0' + (us / 10) % 10;
+    buf[17] = '0' + us % 10;
+}
+
+// ============================================================================
+// Benchmark 23b: Single memcpy without cache (always localtime_r)
+// ============================================================================
+void bench_nocache_precomputed_memcpy(char *buf, size_t size) {
+    (void)size;
+    struct timeval tv;
+    struct tm tm_info;
+    gettimeofday(&tv, NULL);
+    localtime_r(&tv.tv_sec, &tm_info);
+    
+    int ms = tv.tv_usec / 1000;
+    int us = tv.tv_usec % 1000;
+    
+    memcpy(buf, "[ 00:00:00:000.000 ]", 21);
+    buf[2] = '0' + tm_info.tm_hour / 10;
+    buf[3] = '0' + tm_info.tm_hour % 10;
+    buf[5] = '0' + tm_info.tm_min / 10;
+    buf[6] = '0' + tm_info.tm_min % 10;
+    buf[8] = '0' + tm_info.tm_sec / 10;
+    buf[9] = '0' + tm_info.tm_sec % 10;
     buf[11] = '0' + ms / 100;
     buf[12] = '0' + (ms / 10) % 10;
     buf[13] = '0' + ms % 10;
@@ -819,6 +971,42 @@ void bench_fully_cached(char *buf, size_t size) {
 }
 
 // ============================================================================
+// Benchmark 27b: Non-cached full string build
+// ============================================================================
+void bench_nocache_fully(char *buf, size_t size) {
+    (void)size;
+    struct timeval tv;
+    struct tm tm_info;
+    gettimeofday(&tv, NULL);
+    localtime_r(&tv.tv_sec, &tm_info);
+    
+    int ms = tv.tv_usec / 1000;
+    int us = tv.tv_usec % 1000;
+    
+    buf[0] = '[';
+    buf[1] = ' ';
+    buf[2] = '0' + tm_info.tm_hour / 10;
+    buf[3] = '0' + tm_info.tm_hour % 10;
+    buf[4] = ':';
+    buf[5] = '0' + tm_info.tm_min / 10;
+    buf[6] = '0' + tm_info.tm_min % 10;
+    buf[7] = ':';
+    buf[8] = '0' + tm_info.tm_sec / 10;
+    buf[9] = '0' + tm_info.tm_sec % 10;
+    buf[10] = ':';
+    buf[11] = '0' + ms / 100;
+    buf[12] = '0' + (ms / 10) % 10;
+    buf[13] = '0' + ms % 10;
+    buf[14] = '.';
+    buf[15] = '0' + us / 100;
+    buf[16] = '0' + (us / 10) % 10;
+    buf[17] = '0' + us % 10;
+    buf[18] = ' ';
+    buf[19] = ']';
+    buf[20] = '\0';
+}
+
+// ============================================================================
 // Benchmark 28: clock_gettime + cached gmtime
 // ============================================================================
 void bench_clock_cached_gm(char *buf, size_t size) {
@@ -853,6 +1041,37 @@ void bench_clock_cached_gm(char *buf, size_t size) {
 }
 
 // ============================================================================
+// Benchmark 28b: clock_gettime + gmtime without cache
+// ============================================================================
+void bench_clock_nocache_gm(char *buf, size_t size) {
+    (void)size;
+    struct timespec ts;
+    struct tm tm_info;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    gmtime_r(&ts.tv_sec, &tm_info);
+    
+    int ms = ts.tv_nsec / 1000000;
+    int us = (ts.tv_nsec / 1000) % 1000;
+    
+    buf[0] = '[';
+    buf[1] = ' ';
+    memcpy(buf + 2, digit_pairs + tm_info.tm_hour * 2, 2);
+    buf[4] = ':';
+    memcpy(buf + 5, digit_pairs + tm_info.tm_min * 2, 2);
+    buf[7] = ':';
+    memcpy(buf + 8, digit_pairs + tm_info.tm_sec * 2, 2);
+    buf[10] = ':';
+    buf[11] = '0' + ms / 100;
+    memcpy(buf + 12, digit_pairs + (ms % 100) * 2, 2);
+    buf[14] = '.';
+    buf[15] = '0' + us / 100;
+    memcpy(buf + 16, digit_pairs + (us % 100) * 2, 2);
+    buf[18] = ' ';
+    buf[19] = ']';
+    buf[20] = '\0';
+}
+
+// ============================================================================
 // Benchmark 29: strftime with CLOCK_REALTIME
 // ============================================================================
 void bench_strftime_clock(char *buf, size_t size) {
@@ -870,7 +1089,7 @@ void bench_strftime_clock(char *buf, size_t size) {
 }
 
 // ============================================================================
-// Benchmark 30: Minimal - only gettimeofday + lookup
+// Benchmark 30: Minimal - only gettimeofday + lookup (cached)
 // ============================================================================
 void bench_minimal_gettimeofday(char *buf, size_t size) {
     (void)size;
@@ -888,6 +1107,33 @@ void bench_minimal_gettimeofday(char *buf, size_t size) {
     memcpy(buf + 5, digit_pairs + cached_tm.tm_min * 2, 2);
     buf[7] = ':';
     memcpy(buf + 8, digit_pairs + cached_tm.tm_sec * 2, 2);
+    buf[10] = ':';
+    
+    int ms = tv.tv_usec / 1000;
+    int us = tv.tv_usec % 1000;
+    
+    memcpy(buf + 11, digit_triples + ms * 4, 3);
+    buf[14] = '.';
+    memcpy(buf + 15, digit_triples + us * 4, 3);
+    memcpy(buf + 18, " ]", 3);
+}
+
+// ============================================================================
+// Benchmark 30b: Minimal - gettimeofday + lookup without cache
+// ============================================================================
+void bench_minimal_nocache(char *buf, size_t size) {
+    (void)size;
+    struct timeval tv;
+    struct tm tm_info;
+    gettimeofday(&tv, NULL);
+    localtime_r(&tv.tv_sec, &tm_info);
+    
+    memcpy(buf, "[ ", 2);
+    memcpy(buf + 2, digit_pairs + tm_info.tm_hour * 2, 2);
+    buf[4] = ':';
+    memcpy(buf + 5, digit_pairs + tm_info.tm_min * 2, 2);
+    buf[7] = ':';
+    memcpy(buf + 8, digit_pairs + tm_info.tm_sec * 2, 2);
     buf[10] = ':';
     
     int ms = tv.tv_usec / 1000;
@@ -1002,27 +1248,35 @@ static benchmark_t benchmarks[] = {
     {"lookup_table", bench_lookup_table_gettimeofday, "2-digit lookup table"},
     {"syscall_gettimeofday", bench_syscall_gettimeofday, "Direct syscall(SYS_gettimeofday)"},
     {"cached_localtime", bench_cached_localtime, "Cached localtime_r()"},
+    {"nocache_localtime", bench_nocache_localtime, "Non-cached localtime_r() + lookup"},
     {"template_copy", bench_template_copy, "Template memcpy + digit fill"},
     {"clock_manual_digits", bench_clock_manual_digits, "clock_gettime + manual digits"},
     {"gmtime_snprintf", bench_gmtime_snprintf, "gmtime_r() + snprintf() (UTC)"},
     {"gmtime_manual", bench_gmtime_manual, "gmtime_r() + manual digits (UTC)"},
     {"cached_gmtime", bench_cached_gmtime, "Cached gmtime_r() (UTC)"},
+    {"nocache_gmtime", bench_nocache_gmtime, "Non-cached gmtime_r() + lookup (UTC)"},
     {"time_gettimeofday_hybrid", bench_time_gettimeofday_hybrid, "time() + gettimeofday() hybrid"},
     {"time_only_snprintf", bench_time_only_snprintf, "Time only (no sub-second)"},
     {"full_lookup_tables", bench_full_lookup_tables, "Full 2+3 digit lookup tables"},
     {"cached_full_lookup", bench_cached_full_lookup, "Cached localtime + full lookup"},
+    {"nocache_full_lookup", bench_nocache_full_lookup, "Non-cached localtime + full lookup"},
     {"coarse_cached", bench_coarse_cached, "CLOCK_REALTIME_COARSE + cached"},
+    {"coarse_nocache", bench_coarse_nocache, "CLOCK_REALTIME_COARSE + no cache"},
     {"asprintf", bench_asprintf, "asprintf() dynamic allocation"},
     {"strcat_chain", bench_strcat_chain, "strcat() chain"},
     {"multiple_snprintf", bench_multiple_snprintf, "Multiple snprintf() calls"},
-    {"precomputed_memcpy", bench_precomputed_memcpy, "Precomputed string + memcpy"},
+    {"precomputed_memcpy", bench_precomputed_memcpy, "Precomputed string + memcpy (cached)"},
+    {"nocache_precomputed", bench_nocache_precomputed_memcpy, "Precomputed string + memcpy (no cache)"},
     {"uint64_write", bench_uint64_write, "Direct byte-by-byte write"},
     {"inline_all", bench_inline_all, "All calculations inline"},
     {"div_optimization", bench_div_optimization, "Division optimization"},
     {"fully_cached", bench_fully_cached, "Fully cached (only us updated)"},
+    {"nocache_fully", bench_nocache_fully, "Non-cached full string build"},
     {"clock_cached_gm", bench_clock_cached_gm, "clock_gettime + cached gmtime"},
+    {"clock_nocache_gm", bench_clock_nocache_gm, "clock_gettime + gmtime (no cache)"},
     {"strftime_clock", bench_strftime_clock, "strftime() + clock_gettime()"},
-    {"minimal_gettimeofday", bench_minimal_gettimeofday, "Minimal with full lookup"},
+    {"minimal_gettimeofday", bench_minimal_gettimeofday, "Minimal with full lookup (cached)"},
+    {"minimal_nocache", bench_minimal_nocache, "Minimal with full lookup (no cache)"},
     {"monotonic_relative", bench_monotonic_relative, "CLOCK_MONOTONIC relative"},
     {"batch_read", bench_batch_read, "Batched time read pattern"},
 };
