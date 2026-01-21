@@ -1,0 +1,7 @@
+# Ignore build artifacts except bin directory contents
+*.o
+*.d
+
+# Keep the binary
+!bin/
+!bin/benchmark
