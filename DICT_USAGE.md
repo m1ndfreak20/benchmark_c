@@ -1,12 +1,13 @@
-# dict.h - Fast Dictionary Library for C
+# dict.h - Generic Dictionary Library for C
 
-**Single-header** implementation of `Dictionary<string, int>` using Robin Hood hashing with DJB2 hash function.
+**Single-header** generic dictionary implementation using Robin Hood hashing with DJB2 hash function.
 
 ## Features
 
+- **Generic** - supports any key/value types
 - **Header-only** - just include one file
-- **Fast** - Robin Hood hashing with ~4 ns lookups
-- **Simple API** - intuitive functions
+- **Fast** - Robin Hood hashing with ~200-350 ns lookups
+- **Type-safe** - macros generate typed functions
 - **Auto-resize** - grows automatically
 - **Iterator support** - iterate over all entries
 - **No dependencies** - pure C, works with C11+
@@ -18,235 +19,278 @@ Copy `include/dict.h` to your project.
 ## Quick Start
 
 ```c
-#define DICT_IMPLEMENTATION
+#define _GNU_SOURCE
 #include "dict.h"
 
+// Define your dictionary type
+DICT_DEFINE_STR_INT(MyDict)  // Dict<string, int>
+
 int main() {
-    // Create dictionary
-    Dict *dict = dict_create();
+    MyDict *dict = MyDict_create();
     
-    // Insert
-    dict_set(dict, "apple", 10);
-    dict_set(dict, "banana", 20);
+    MyDict_set(dict, "apple", 10);
+    MyDict_set(dict, "banana", 20);
     
-    // Get
-    int value = dict_get(dict, "apple", -1);  // Returns 10
+    int val = MyDict_get(dict, "apple", -1);  // Returns 10
     
-    // Check existence
-    if (dict_contains(dict, "apple")) {
+    if (MyDict_contains(dict, "banana")) {
         printf("Found!\n");
     }
     
-    // Remove
-    dict_remove(dict, "banana");
-    
-    // Cleanup
-    dict_destroy(dict);
+    MyDict_remove(dict, "banana");
+    MyDict_destroy(dict);
     return 0;
 }
 ```
 
-## Compilation
+## Available Type Macros
 
-```bash
-gcc -O3 -o myprogram myprogram.c
+```c
+// String key
+DICT_DEFINE_STR_INT(Name)      // Dict<string, int>
+DICT_DEFINE_STR_DOUBLE(Name)   // Dict<string, double>
+DICT_DEFINE_STR_FLOAT(Name)    // Dict<string, float>
+DICT_DEFINE_STR_STR(Name)      // Dict<string, string>
+DICT_DEFINE_STR_PTR(Name)      // Dict<string, void*>
+
+// Integer key
+DICT_DEFINE_INT_INT(Name)      // Dict<int, int>
+DICT_DEFINE_INT_DOUBLE(Name)   // Dict<int, double>
+DICT_DEFINE_INT_STR(Name)      // Dict<int, string>
+DICT_DEFINE_INT_PTR(Name)      // Dict<int, void*>
+
+// Other keys
+DICT_DEFINE_UINT32_INT(Name)   // Dict<uint32_t, int>
+DICT_DEFINE_UINT32_PTR(Name)   // Dict<uint32_t, void*>
+DICT_DEFINE_UINT64_INT(Name)   // Dict<uint64_t, int>
+DICT_DEFINE_UINT64_PTR(Name)   // Dict<uint64_t, void*>
+DICT_DEFINE_PTR_INT(Name)      // Dict<void*, int>
+DICT_DEFINE_PTR_PTR(Name)      // Dict<void*, void*>
 ```
 
-Or use the provided Makefile:
+## Custom Types
 
-```bash
-make dict-example
-./bin/dict_example
+For custom types, use the full macro:
+
+```c
+DICT_DEFINE(Name, KEY_TYPE, VALUE_TYPE, HASH_FN, EQ_FN, COPY_KEY_FN, FREE_KEY_FN)
+```
+
+Example with custom struct key:
+
+```c
+// Your key type
+typedef struct { int x, y; } Point;
+
+// Hash function
+uint32_t hash_point(Point p) {
+    return dict_hash_int(p.x) ^ dict_hash_int(p.y);
+}
+
+// Equality function
+bool eq_point(Point a, Point b) {
+    return a.x == b.x && a.y == b.y;
+}
+
+// Copy/free for value types (no allocation needed)
+#define copy_point(p) (p)
+#define free_point(p) ((void)0)
+
+// Define the dictionary
+DICT_DEFINE(PointDict, Point, int, hash_point, eq_point, copy_point, free_point)
+
+// Use it
+PointDict *dict = PointDict_create();
+PointDict_set(dict, (Point){1, 2}, 100);
+int val = PointDict_get(dict, (Point){1, 2}, -1);
+PointDict_destroy(dict);
 ```
 
 ## API Reference
 
+All functions are prefixed with your dictionary name. Example for `DICT_DEFINE_STR_INT(MyDict)`:
+
 ### Creation & Destruction
 
 ```c
-// Create with default capacity (16)
-Dict* dict_create(void);
-
-// Create with specific capacity
-Dict* dict_create_with_capacity(size_t capacity);
-
-// Destroy and free all memory
-void dict_destroy(Dict *dict);
+MyDict* MyDict_create(void);                        // Create with default capacity
+MyDict* MyDict_create_with_capacity(size_t cap);    // Create with specific capacity
+void MyDict_destroy(MyDict *dict);                  // Free all memory
 ```
 
 ### Basic Operations
 
 ```c
-// Insert or update key-value pair
-// Returns true if new key inserted, false if updated
-bool dict_set(Dict *dict, const char *key, int value);
-
-// Get value by key (returns default_value if not found)
-int dict_get(Dict *dict, const char *key, int default_value);
-
-// Get pointer to value (returns NULL if not found)
-// Allows direct modification of value
-int* dict_get_ptr(Dict *dict, const char *key);
-
-// Check if key exists
-bool dict_contains(Dict *dict, const char *key);
-
-// Remove key (returns true if found and removed)
-bool dict_remove(Dict *dict, const char *key);
+bool MyDict_set(MyDict *dict, char *key, int value);     // Insert/update, returns true if new
+int MyDict_get(MyDict *dict, char *key, int default_val); // Get or default
+int* MyDict_get_ptr(MyDict *dict, char *key);            // Get pointer to value (or NULL)
+bool MyDict_contains(MyDict *dict, char *key);           // Check if key exists
+bool MyDict_remove(MyDict *dict, char *key);             // Remove key
 ```
 
-### Utility Functions
+### Utility
 
 ```c
-// Get number of elements
-size_t dict_size(Dict *dict);
-
-// Get current capacity
-size_t dict_capacity(Dict *dict);
-
-// Check if empty
-bool dict_empty(Dict *dict);
-
-// Remove all elements (keeps capacity)
-void dict_clear(Dict *dict);
-
-// Reserve capacity for at least n elements
-void dict_reserve(Dict *dict, size_t n);
-
-// Get current load factor (size / capacity)
-double dict_load_factor(Dict *dict);
+size_t MyDict_size(MyDict *dict);      // Number of elements
+size_t MyDict_capacity(MyDict *dict);  // Current capacity
+bool MyDict_empty(MyDict *dict);       // Is empty?
+void MyDict_clear(MyDict *dict);       // Remove all elements
 ```
 
 ### Iteration
 
 ```c
-Dict *dict = dict_create();
-dict_set(dict, "a", 1);
-dict_set(dict, "b", 2);
-
-DictIterator iter = dict_iter(dict);
-const char *key;
+MyDict_Iterator iter = MyDict_iter(dict);
+char *key;
 int value;
-while (dict_next(&iter, &key, &value)) {
+while (MyDict_next(&iter, &key, &value)) {
     printf("%s = %d\n", key, value);
 }
 ```
 
 ## Examples
 
-### Word Counter
+### Dict<string, int> - Word Counter
 
 ```c
-#define DICT_IMPLEMENTATION
+#define _GNU_SOURCE
 #include "dict.h"
-#include <stdio.h>
 #include <string.h>
 
+DICT_DEFINE_STR_INT(WordCount)
+
 int main() {
-    Dict *wc = dict_create();
-    char *text = strdup("the quick brown fox jumps over the lazy dog");
+    WordCount *wc = WordCount_create();
+    char *text = strdup("the quick brown fox the lazy dog the fox");
     
     char *word = strtok(text, " ");
     while (word) {
-        int count = dict_get(wc, word, 0);
-        dict_set(wc, word, count + 1);
+        int count = WordCount_get(wc, word, 0);
+        WordCount_set(wc, word, count + 1);
         word = strtok(NULL, " ");
     }
     
-    DictIterator iter = dict_iter(wc);
-    const char *key;
-    int value;
-    while (dict_next(&iter, &key, &value)) {
-        printf("%s: %d\n", key, value);
+    WordCount_Iterator iter = WordCount_iter(wc);
+    char *w; int c;
+    while (WordCount_next(&iter, &w, &c)) {
+        printf("%s: %d\n", w, c);
     }
     
     free(text);
-    dict_destroy(wc);
-    return 0;
+    WordCount_destroy(wc);
 }
 ```
 
-### Increment Counter via Pointer
+### Dict<string, double> - Prices
 
 ```c
-Dict *dict = dict_create();
-dict_set(dict, "counter", 0);
+DICT_DEFINE_STR_DOUBLE(PriceDict)
 
-// Increment without re-hashing the key
-int *ptr = dict_get_ptr(dict, "counter");
-if (ptr) {
-    (*ptr)++;
-}
+PriceDict *prices = PriceDict_create();
+PriceDict_set(prices, "BTC", 45000.50);
+PriceDict_set(prices, "ETH", 2500.75);
 
-printf("Counter: %d\n", dict_get(dict, "counter", 0));  // Output: 1
+printf("BTC: $%.2f\n", PriceDict_get(prices, "BTC", 0.0));
+PriceDict_destroy(prices);
 ```
 
-### Pre-allocate Capacity
+### Dict<int, int> - Squares
 
 ```c
-// When you know approximate size
-Dict *dict = dict_create_with_capacity(10000);
+DICT_DEFINE_INT_INT(Squares)
 
-// Or reserve later
-dict_reserve(dict, 50000);
+Squares *sq = Squares_create();
+for (int i = 1; i <= 100; i++) {
+    Squares_set(sq, i, i * i);
+}
+
+printf("50^2 = %d\n", Squares_get(sq, 50, 0));  // 2500
+Squares_destroy(sq);
+```
+
+### Dict<int, string> - HTTP Codes
+
+```c
+DICT_DEFINE_INT_STR(HttpCodes)
+
+HttpCodes *codes = HttpCodes_create();
+HttpCodes_set(codes, 200, "OK");
+HttpCodes_set(codes, 404, "Not Found");
+HttpCodes_set(codes, 500, "Internal Server Error");
+
+printf("HTTP 404: %s\n", HttpCodes_get(codes, 404, "Unknown"));
+HttpCodes_destroy(codes);
+```
+
+### Dict<string, void*> - Object Storage
+
+```c
+DICT_DEFINE_STR_PTR(ObjectStore)
+
+typedef struct { int id; char name[32]; } User;
+User alice = {1, "Alice"};
+User bob = {2, "Bob"};
+
+ObjectStore *users = ObjectStore_create();
+ObjectStore_set(users, "alice", &alice);
+ObjectStore_set(users, "bob", &bob);
+
+User *u = (User*)ObjectStore_get(users, "alice", NULL);
+if (u) printf("Found: %s\n", u->name);
+
+ObjectStore_destroy(users);
 ```
 
 ## Performance
 
-Benchmark results (100,000 elements):
+Benchmark results (100,000 string keys):
 
 | Operation | Time (ns/op) |
 |-----------|-------------|
-| Insert | ~500 |
-| Get (hit) | ~165 |
-| Contains (hit) | ~190 |
-| Contains (miss) | ~140 |
+| Insert | ~1000 |
+| Get (hit) | ~350 |
+| Contains (miss) | ~200 |
 
-Robin Hood hashing provides:
-- **Low variance** in lookup times
-- **Efficient** deletions (backward shift)
-- **Good cache** locality
+## Built-in Hash Functions
+
+```c
+dict_hash_str(const char *s)   // DJB2 for strings
+dict_hash_int(int key)         // Integer hash
+dict_hash_uint32(uint32_t key) // uint32 hash
+dict_hash_uint64(uint64_t key) // uint64 hash
+dict_hash_ptr(const void *ptr) // Pointer hash
+```
+
+## Built-in Comparison Functions
+
+```c
+dict_eq_str(a, b)     // strcmp based
+dict_eq_int(a, b)     // a == b
+dict_eq_uint32(a, b)  // a == b
+dict_eq_uint64(a, b)  // a == b
+dict_eq_ptr(a, b)     // a == b
+```
 
 ## Configuration
 
 Define before including `dict.h`:
 
 ```c
-// Initial capacity (default: 16)
-#define DICT_INITIAL_CAPACITY 1024
-
-// Load factor threshold for resize (default: 0.75)
-#define DICT_LOAD_FACTOR 0.5
-
-#define DICT_IMPLEMENTATION
+#define DICT_INITIAL_CAPACITY 1024  // Default: 16
+#define DICT_LOAD_FACTOR 0.5        // Default: 0.75
 #include "dict.h"
 ```
 
 ## Thread Safety
 
-This library is **NOT thread-safe**. For multi-threaded use, add your own synchronization.
+This library is **NOT thread-safe**. Add your own synchronization for multi-threaded use.
 
 ## Memory Management
 
-- Keys are **copied** (via `strdup`) when inserted
-- Keys are **freed** when removed or dictionary is destroyed
-- Values are stored by value (no allocation)
+- **String keys** are copied via `strdup()` and freed on removal
+- **Value types** (int, double, pointers) are stored by value
+- **Pointer values** are NOT freed - you manage their lifetime
 
 ## License
 
 Public Domain / MIT
-
----
-
-## Files
-
-```
-include/
-  dict.h           # Header-only library (copy this to your project)
-
-src/
-  dict_example.c   # Usage examples
-
-bin/
-  dict_example     # Compiled example (Linux x64)
-```

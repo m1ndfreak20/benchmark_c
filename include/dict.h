@@ -1,12 +1,21 @@
 /*
- * dict.h - Fast Dictionary<string, int> implementation
+ * dict.h - Generic Dictionary implementation (Robin Hood + DJB2)
  * 
- * Robin Hood hashing with DJB2 hash function
- * Single-header library for C projects
+ * Single-header library with support for custom key/value types.
  * 
  * Usage:
- *   #define DICT_IMPLEMENTATION
- *   #include "dict.h"
+ *   // Define your dictionary type
+ *   DICT_DEFINE_STR_INT(StrIntDict)    // Dict<string, int>
+ *   DICT_DEFINE_INT_INT(IntIntDict)    // Dict<int, int>
+ *   
+ *   // Or custom types:
+ *   DICT_DEFINE(MyDict, char*, double, dict_hash_str, dict_eq_str, dict_copy_str, dict_free_str)
+ *   
+ *   // Use it
+ *   StrIntDict *dict = StrIntDict_create();
+ *   StrIntDict_set(dict, "key", 42);
+ *   int val = StrIntDict_get(dict, "key", -1);
+ *   StrIntDict_destroy(dict);
  * 
  * License: Public Domain / MIT
  */
@@ -14,13 +23,19 @@
 #ifndef DICT_H
 #define DICT_H
 
-#ifdef __cplusplus
-extern "C" {
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
 #endif
 
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
+#include <stdlib.h>
+#include <string.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 // ============================================================================
 // Configuration
@@ -35,420 +50,389 @@ extern "C" {
 #endif
 
 // ============================================================================
-// Types
+// Hash Functions
 // ============================================================================
 
-typedef struct {
-    char *key;
-    int value;
-    uint32_t hash;
-    int psl;  // probe sequence length (-1 = empty)
-} DictEntry;
-
-typedef struct {
-    DictEntry *entries;
-    size_t capacity;
-    size_t size;
-} Dict;
-
-// ============================================================================
-// API Functions
-// ============================================================================
-
-// Create a new dictionary with default capacity
-Dict* dict_create(void);
-
-// Create a new dictionary with specified initial capacity
-Dict* dict_create_with_capacity(size_t capacity);
-
-// Destroy dictionary and free all memory
-void dict_destroy(Dict *dict);
-
-// Insert or update key-value pair
-// Returns true if new key was inserted, false if existing key was updated
-bool dict_set(Dict *dict, const char *key, int value);
-
-// Get value by key
-// Returns the value if found, or default_value if not found
-int dict_get(Dict *dict, const char *key, int default_value);
-
-// Get pointer to value by key (allows modification)
-// Returns NULL if key not found
-int* dict_get_ptr(Dict *dict, const char *key);
-
-// Check if key exists
-bool dict_contains(Dict *dict, const char *key);
-
-// Remove key from dictionary
-// Returns true if key was found and removed, false if not found
-bool dict_remove(Dict *dict, const char *key);
-
-// Get number of elements
-size_t dict_size(Dict *dict);
-
-// Get current capacity
-size_t dict_capacity(Dict *dict);
-
-// Check if dictionary is empty
-bool dict_empty(Dict *dict);
-
-// Clear all elements (keeps capacity)
-void dict_clear(Dict *dict);
-
-// ============================================================================
-// Iterator API
-// ============================================================================
-
-typedef struct {
-    Dict *dict;
-    size_t index;
-} DictIterator;
-
-// Initialize iterator
-DictIterator dict_iter(Dict *dict);
-
-// Get next key-value pair
-// Returns true if there is a next element, false if iteration is complete
-// If returns true, key and value pointers are set
-bool dict_next(DictIterator *iter, const char **key, int *value);
-
-// ============================================================================
-// Utility Functions
-// ============================================================================
-
-// Reserve capacity for at least n elements
-void dict_reserve(Dict *dict, size_t n);
-
-// Get load factor (size / capacity)
-double dict_load_factor(Dict *dict);
-
-// ============================================================================
-// Implementation
-// ============================================================================
-
-#ifdef DICT_IMPLEMENTATION
-
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
-#endif
-
-#include <stdlib.h>
-#include <string.h>
-
-// DJB2 hash function - fast and good distribution for strings
-static inline uint32_t dict_hash(const char *str) {
+// DJB2 hash for strings
+static inline uint32_t dict_hash_str(const char *str) {
     uint32_t hash = 5381;
     int c;
     while ((c = *str++))
-        hash = ((hash << 5) + hash) + c;  // hash * 33 + c
+        hash = ((hash << 5) + hash) + c;
     return hash;
 }
 
-// Internal: resize the dictionary
-static void dict_resize(Dict *dict, size_t new_capacity) {
-    DictEntry *old_entries = dict->entries;
-    size_t old_capacity = dict->capacity;
-    
-    dict->entries = (DictEntry*)calloc(new_capacity, sizeof(DictEntry));
-    dict->capacity = new_capacity;
-    dict->size = 0;
-    
-    // Mark all as empty
-    for (size_t i = 0; i < new_capacity; i++) {
-        dict->entries[i].psl = -1;
-    }
-    
-    // Reinsert all elements
-    for (size_t i = 0; i < old_capacity; i++) {
-        if (old_entries[i].psl >= 0) {
-            dict_set(dict, old_entries[i].key, old_entries[i].value);
-            free(old_entries[i].key);
-        }
-    }
-    
-    free(old_entries);
+// Hash for integers
+static inline uint32_t dict_hash_int(int key) {
+    uint32_t x = (uint32_t)key;
+    x = ((x >> 16) ^ x) * 0x45d9f3b;
+    x = ((x >> 16) ^ x) * 0x45d9f3b;
+    x = (x >> 16) ^ x;
+    return x;
 }
 
-Dict* dict_create(void) {
-    return dict_create_with_capacity(DICT_INITIAL_CAPACITY);
+// Hash for uint32
+static inline uint32_t dict_hash_uint32(uint32_t key) {
+    key = ((key >> 16) ^ key) * 0x45d9f3b;
+    key = ((key >> 16) ^ key) * 0x45d9f3b;
+    key = (key >> 16) ^ key;
+    return key;
 }
 
-Dict* dict_create_with_capacity(size_t capacity) {
-    Dict *dict = (Dict*)malloc(sizeof(Dict));
-    if (!dict) return NULL;
-    
-    dict->entries = (DictEntry*)calloc(capacity, sizeof(DictEntry));
-    if (!dict->entries) {
-        free(dict);
-        return NULL;
-    }
-    
-    dict->capacity = capacity;
-    dict->size = 0;
-    
-    // Mark all entries as empty
-    for (size_t i = 0; i < capacity; i++) {
-        dict->entries[i].psl = -1;
-    }
-    
-    return dict;
+// Hash for uint64
+static inline uint32_t dict_hash_uint64(uint64_t key) {
+    key = (~key) + (key << 18);
+    key = key ^ (key >> 31);
+    key = key * 21;
+    key = key ^ (key >> 11);
+    key = key + (key << 6);
+    key = key ^ (key >> 22);
+    return (uint32_t)key;
 }
 
-void dict_destroy(Dict *dict) {
-    if (!dict) return;
-    
-    for (size_t i = 0; i < dict->capacity; i++) {
-        if (dict->entries[i].psl >= 0 && dict->entries[i].key) {
-            free(dict->entries[i].key);
-        }
-    }
-    free(dict->entries);
-    free(dict);
+// Hash for pointers
+static inline uint32_t dict_hash_ptr(const void *ptr) {
+    return dict_hash_uint64((uint64_t)(uintptr_t)ptr);
 }
 
-bool dict_set(Dict *dict, const char *key, int value) {
-    if (!dict || !key) return false;
-    
-    // Check if resize needed
-    if ((double)(dict->size + 1) / dict->capacity > DICT_LOAD_FACTOR) {
-        dict_resize(dict, dict->capacity * 2);
-    }
-    
-    uint32_t hash = dict_hash(key);
-    size_t idx = hash % dict->capacity;
-    
-    // Create entry to insert
-    DictEntry entry;
-    entry.key = NULL;  // Will be set if we need to insert
-    entry.value = value;
-    entry.hash = hash;
-    entry.psl = 0;
-    
-    bool is_new = true;
-    (void)is_new; // unused for now
-    
-    for (size_t i = 0; i < dict->capacity; i++) {
-        size_t probe = (idx + i) % dict->capacity;
-        
-        // Empty slot - insert here
-        if (dict->entries[probe].psl < 0) {
-            if (!entry.key) {
-                entry.key = strdup(key);
-                if (!entry.key) return false;
-            }
-            dict->entries[probe] = entry;
-            dict->size++;
-            return true;
-        }
-        
-        // Key already exists - update value
-        if (dict->entries[probe].hash == hash && 
-            strcmp(dict->entries[probe].key, key) == 0) {
-            dict->entries[probe].value = value;
-            if (entry.key) free(entry.key);
-            return false;  // Not a new key
-        }
-        
-        // Robin Hood: steal from the rich
-        if (entry.psl > dict->entries[probe].psl) {
-            if (!entry.key) {
-                entry.key = strdup(key);
-                if (!entry.key) return false;
-            }
-            DictEntry tmp = dict->entries[probe];
-            dict->entries[probe] = entry;
-            entry = tmp;
-            is_new = false;  // We're now moving an existing entry
-        }
-        
-        entry.psl++;
-    }
-    
-    // Should never reach here if load factor is maintained
-    if (entry.key) free(entry.key);
-    return false;
+// ============================================================================
+// Key Comparison Functions
+// ============================================================================
+
+static inline bool dict_eq_str(const char *a, const char *b) {
+    return strcmp(a, b) == 0;
 }
 
-int dict_get(Dict *dict, const char *key, int default_value) {
-    if (!dict || !key) return default_value;
-    
-    uint32_t hash = dict_hash(key);
-    size_t idx = hash % dict->capacity;
-    
-    for (int psl = 0; psl < (int)dict->capacity; psl++) {
-        size_t probe = (idx + psl) % dict->capacity;
-        
-        // Empty slot or would have been inserted here
-        if (dict->entries[probe].psl < 0 || dict->entries[probe].psl < psl) {
-            return default_value;
-        }
-        
-        // Found key
-        if (dict->entries[probe].hash == hash &&
-            strcmp(dict->entries[probe].key, key) == 0) {
-            return dict->entries[probe].value;
-        }
-    }
-    
-    return default_value;
+static inline bool dict_eq_int(int a, int b) {
+    return a == b;
 }
 
-int* dict_get_ptr(Dict *dict, const char *key) {
-    if (!dict || !key) return NULL;
-    
-    uint32_t hash = dict_hash(key);
-    size_t idx = hash % dict->capacity;
-    
-    for (int psl = 0; psl < (int)dict->capacity; psl++) {
-        size_t probe = (idx + psl) % dict->capacity;
-        
-        if (dict->entries[probe].psl < 0 || dict->entries[probe].psl < psl) {
-            return NULL;
-        }
-        
-        if (dict->entries[probe].hash == hash &&
-            strcmp(dict->entries[probe].key, key) == 0) {
-            return &dict->entries[probe].value;
-        }
-    }
-    
-    return NULL;
+static inline bool dict_eq_uint32(uint32_t a, uint32_t b) {
+    return a == b;
 }
 
-bool dict_contains(Dict *dict, const char *key) {
-    if (!dict || !key) return false;
-    
-    uint32_t hash = dict_hash(key);
-    size_t idx = hash % dict->capacity;
-    
-    for (int psl = 0; psl < (int)dict->capacity; psl++) {
-        size_t probe = (idx + psl) % dict->capacity;
-        
-        if (dict->entries[probe].psl < 0 || dict->entries[probe].psl < psl) {
-            return false;
-        }
-        
-        if (dict->entries[probe].hash == hash &&
-            strcmp(dict->entries[probe].key, key) == 0) {
-            return true;
-        }
-    }
-    
-    return false;
+static inline bool dict_eq_uint64(uint64_t a, uint64_t b) {
+    return a == b;
 }
 
-bool dict_remove(Dict *dict, const char *key) {
-    if (!dict || !key) return false;
-    
-    uint32_t hash = dict_hash(key);
-    size_t idx = hash % dict->capacity;
-    
-    for (int psl = 0; psl < (int)dict->capacity; psl++) {
-        size_t probe = (idx + psl) % dict->capacity;
-        
-        if (dict->entries[probe].psl < 0 || dict->entries[probe].psl < psl) {
-            return false;
-        }
-        
-        if (dict->entries[probe].hash == hash &&
-            strcmp(dict->entries[probe].key, key) == 0) {
-            // Free key
-            free(dict->entries[probe].key);
-            dict->entries[probe].key = NULL;
-            dict->entries[probe].psl = -1;
-            dict->size--;
-            
-            // Backward shift deletion to maintain Robin Hood invariant
-            size_t empty = probe;
-            for (size_t j = 1; j < dict->capacity; j++) {
-                size_t next = (probe + j) % dict->capacity;
-                
-                // Stop if next slot is empty or at its ideal position
-                if (dict->entries[next].psl <= 0) {
-                    break;
-                }
-                
-                // Shift entry back
-                dict->entries[empty] = dict->entries[next];
-                dict->entries[empty].psl--;
-                dict->entries[next].psl = -1;
-                dict->entries[next].key = NULL;
-                empty = next;
-            }
-            
-            return true;
-        }
-    }
-    
-    return false;
+static inline bool dict_eq_ptr(const void *a, const void *b) {
+    return a == b;
 }
 
-size_t dict_size(Dict *dict) {
-    return dict ? dict->size : 0;
+// ============================================================================
+// Key Copy/Free Functions
+// ============================================================================
+
+static inline char* dict_copy_str(const char *s) {
+    return strdup(s);
 }
 
-size_t dict_capacity(Dict *dict) {
-    return dict ? dict->capacity : 0;
+static inline void dict_free_str(char *s) {
+    free(s);
 }
 
-bool dict_empty(Dict *dict) {
-    return !dict || dict->size == 0;
+// For non-pointer types, no copy/free needed
+#define dict_copy_val(x) (x)
+#define dict_free_val(x) ((void)0)
+
+// ============================================================================
+// DICT_DEFINE macro - generates type-specific dictionary
+// ============================================================================
+
+#define DICT_DEFINE(NAME, KEY_TYPE, VALUE_TYPE, HASH_FN, EQ_FN, COPY_KEY_FN, FREE_KEY_FN) \
+\
+typedef struct { \
+    KEY_TYPE key; \
+    VALUE_TYPE value; \
+    uint32_t hash; \
+    int psl; \
+} NAME##_Entry; \
+\
+typedef struct { \
+    NAME##_Entry *entries; \
+    size_t capacity; \
+    size_t size; \
+} NAME; \
+\
+typedef struct { \
+    NAME *dict; \
+    size_t index; \
+} NAME##_Iterator; \
+\
+static inline NAME* NAME##_create_with_capacity(size_t capacity) { \
+    NAME *dict = (NAME*)malloc(sizeof(NAME)); \
+    if (!dict) return NULL; \
+    dict->entries = (NAME##_Entry*)calloc(capacity, sizeof(NAME##_Entry)); \
+    if (!dict->entries) { free(dict); return NULL; } \
+    dict->capacity = capacity; \
+    dict->size = 0; \
+    for (size_t i = 0; i < capacity; i++) \
+        dict->entries[i].psl = -1; \
+    return dict; \
+} \
+\
+static inline NAME* NAME##_create(void) { \
+    return NAME##_create_with_capacity(DICT_INITIAL_CAPACITY); \
+} \
+\
+static inline void NAME##_destroy(NAME *dict) { \
+    if (!dict) return; \
+    for (size_t i = 0; i < dict->capacity; i++) { \
+        if (dict->entries[i].psl >= 0) { \
+            FREE_KEY_FN(dict->entries[i].key); \
+        } \
+    } \
+    free(dict->entries); \
+    free(dict); \
+} \
+\
+static inline void NAME##_resize(NAME *dict, size_t new_capacity) { \
+    NAME##_Entry *old_entries = dict->entries; \
+    size_t old_capacity = dict->capacity; \
+    dict->entries = (NAME##_Entry*)calloc(new_capacity, sizeof(NAME##_Entry)); \
+    dict->capacity = new_capacity; \
+    dict->size = 0; \
+    for (size_t i = 0; i < new_capacity; i++) \
+        dict->entries[i].psl = -1; \
+    for (size_t i = 0; i < old_capacity; i++) { \
+        if (old_entries[i].psl >= 0) { \
+            uint32_t hash = old_entries[i].hash; \
+            size_t idx = hash % dict->capacity; \
+            NAME##_Entry entry = old_entries[i]; \
+            entry.psl = 0; \
+            for (size_t j = 0; j < dict->capacity; j++) { \
+                size_t probe = (idx + j) % dict->capacity; \
+                if (dict->entries[probe].psl < 0) { \
+                    dict->entries[probe] = entry; \
+                    dict->size++; \
+                    break; \
+                } \
+                if (entry.psl > dict->entries[probe].psl) { \
+                    NAME##_Entry tmp = dict->entries[probe]; \
+                    dict->entries[probe] = entry; \
+                    entry = tmp; \
+                } \
+                entry.psl++; \
+            } \
+        } \
+    } \
+    free(old_entries); \
+} \
+\
+static inline bool NAME##_set(NAME *dict, KEY_TYPE key, VALUE_TYPE value) { \
+    if (!dict) return false; \
+    if ((double)(dict->size + 1) / dict->capacity > DICT_LOAD_FACTOR) { \
+        NAME##_resize(dict, dict->capacity * 2); \
+    } \
+    uint32_t hash = HASH_FN(key); \
+    size_t idx = hash % dict->capacity; \
+    NAME##_Entry entry; \
+    entry.key = COPY_KEY_FN(key); \
+    entry.value = value; \
+    entry.hash = hash; \
+    entry.psl = 0; \
+    for (size_t i = 0; i < dict->capacity; i++) { \
+        size_t probe = (idx + i) % dict->capacity; \
+        if (dict->entries[probe].psl < 0) { \
+            dict->entries[probe] = entry; \
+            dict->size++; \
+            return true; \
+        } \
+        if (dict->entries[probe].hash == hash && \
+            EQ_FN(dict->entries[probe].key, key)) { \
+            dict->entries[probe].value = value; \
+            FREE_KEY_FN(entry.key); \
+            return false; \
+        } \
+        if (entry.psl > dict->entries[probe].psl) { \
+            NAME##_Entry tmp = dict->entries[probe]; \
+            dict->entries[probe] = entry; \
+            entry = tmp; \
+        } \
+        entry.psl++; \
+    } \
+    FREE_KEY_FN(entry.key); \
+    return false; \
+} \
+\
+static inline VALUE_TYPE NAME##_get(NAME *dict, KEY_TYPE key, VALUE_TYPE default_val) { \
+    if (!dict) return default_val; \
+    uint32_t hash = HASH_FN(key); \
+    size_t idx = hash % dict->capacity; \
+    for (int psl = 0; psl < (int)dict->capacity; psl++) { \
+        size_t probe = (idx + psl) % dict->capacity; \
+        if (dict->entries[probe].psl < 0 || dict->entries[probe].psl < psl) \
+            return default_val; \
+        if (dict->entries[probe].hash == hash && \
+            EQ_FN(dict->entries[probe].key, key)) \
+            return dict->entries[probe].value; \
+    } \
+    return default_val; \
+} \
+\
+static inline VALUE_TYPE* NAME##_get_ptr(NAME *dict, KEY_TYPE key) { \
+    if (!dict) return NULL; \
+    uint32_t hash = HASH_FN(key); \
+    size_t idx = hash % dict->capacity; \
+    for (int psl = 0; psl < (int)dict->capacity; psl++) { \
+        size_t probe = (idx + psl) % dict->capacity; \
+        if (dict->entries[probe].psl < 0 || dict->entries[probe].psl < psl) \
+            return NULL; \
+        if (dict->entries[probe].hash == hash && \
+            EQ_FN(dict->entries[probe].key, key)) \
+            return &dict->entries[probe].value; \
+    } \
+    return NULL; \
+} \
+\
+static inline bool NAME##_contains(NAME *dict, KEY_TYPE key) { \
+    if (!dict) return false; \
+    uint32_t hash = HASH_FN(key); \
+    size_t idx = hash % dict->capacity; \
+    for (int psl = 0; psl < (int)dict->capacity; psl++) { \
+        size_t probe = (idx + psl) % dict->capacity; \
+        if (dict->entries[probe].psl < 0 || dict->entries[probe].psl < psl) \
+            return false; \
+        if (dict->entries[probe].hash == hash && \
+            EQ_FN(dict->entries[probe].key, key)) \
+            return true; \
+    } \
+    return false; \
+} \
+\
+static inline bool NAME##_remove(NAME *dict, KEY_TYPE key) { \
+    if (!dict) return false; \
+    uint32_t hash = HASH_FN(key); \
+    size_t idx = hash % dict->capacity; \
+    for (int psl = 0; psl < (int)dict->capacity; psl++) { \
+        size_t probe = (idx + psl) % dict->capacity; \
+        if (dict->entries[probe].psl < 0 || dict->entries[probe].psl < psl) \
+            return false; \
+        if (dict->entries[probe].hash == hash && \
+            EQ_FN(dict->entries[probe].key, key)) { \
+            FREE_KEY_FN(dict->entries[probe].key); \
+            dict->entries[probe].psl = -1; \
+            dict->size--; \
+            size_t empty = probe; \
+            for (size_t j = 1; j < dict->capacity; j++) { \
+                size_t next = (probe + j) % dict->capacity; \
+                if (dict->entries[next].psl <= 0) break; \
+                dict->entries[empty] = dict->entries[next]; \
+                dict->entries[empty].psl--; \
+                dict->entries[next].psl = -1; \
+                empty = next; \
+            } \
+            return true; \
+        } \
+    } \
+    return false; \
+} \
+\
+static inline size_t NAME##_size(NAME *dict) { \
+    return dict ? dict->size : 0; \
+} \
+\
+static inline size_t NAME##_capacity(NAME *dict) { \
+    return dict ? dict->capacity : 0; \
+} \
+\
+static inline bool NAME##_empty(NAME *dict) { \
+    return !dict || dict->size == 0; \
+} \
+\
+static inline void NAME##_clear(NAME *dict) { \
+    if (!dict) return; \
+    for (size_t i = 0; i < dict->capacity; i++) { \
+        if (dict->entries[i].psl >= 0) { \
+            FREE_KEY_FN(dict->entries[i].key); \
+            dict->entries[i].psl = -1; \
+        } \
+    } \
+    dict->size = 0; \
+} \
+\
+static inline NAME##_Iterator NAME##_iter(NAME *dict) { \
+    NAME##_Iterator iter = {dict, 0}; \
+    return iter; \
+} \
+\
+static inline bool NAME##_next(NAME##_Iterator *iter, KEY_TYPE *key, VALUE_TYPE *value) { \
+    if (!iter || !iter->dict) return false; \
+    while (iter->index < iter->dict->capacity) { \
+        if (iter->dict->entries[iter->index].psl >= 0) { \
+            if (key) *key = iter->dict->entries[iter->index].key; \
+            if (value) *value = iter->dict->entries[iter->index].value; \
+            iter->index++; \
+            return true; \
+        } \
+        iter->index++; \
+    } \
+    return false; \
 }
 
-void dict_clear(Dict *dict) {
-    if (!dict) return;
-    
-    for (size_t i = 0; i < dict->capacity; i++) {
-        if (dict->entries[i].psl >= 0 && dict->entries[i].key) {
-            free(dict->entries[i].key);
-            dict->entries[i].key = NULL;
-        }
-        dict->entries[i].psl = -1;
-    }
-    dict->size = 0;
-}
+// ============================================================================
+// Convenience macros for common types
+// ============================================================================
 
-DictIterator dict_iter(Dict *dict) {
-    DictIterator iter = {dict, 0};
-    return iter;
-}
+// Dict<string, int>
+#define DICT_DEFINE_STR_INT(NAME) \
+    DICT_DEFINE(NAME, char*, int, dict_hash_str, dict_eq_str, dict_copy_str, dict_free_str)
 
-bool dict_next(DictIterator *iter, const char **key, int *value) {
-    if (!iter || !iter->dict) return false;
-    
-    while (iter->index < iter->dict->capacity) {
-        if (iter->dict->entries[iter->index].psl >= 0) {
-            if (key) *key = iter->dict->entries[iter->index].key;
-            if (value) *value = iter->dict->entries[iter->index].value;
-            iter->index++;
-            return true;
-        }
-        iter->index++;
-    }
-    
-    return false;
-}
+// Dict<string, string>
+#define DICT_DEFINE_STR_STR(NAME) \
+    DICT_DEFINE(NAME, char*, char*, dict_hash_str, dict_eq_str, dict_copy_str, dict_free_str)
 
-void dict_reserve(Dict *dict, size_t n) {
-    if (!dict) return;
-    
-    size_t required = (size_t)(n / DICT_LOAD_FACTOR) + 1;
-    if (required > dict->capacity) {
-        // Round up to next power of 2
-        size_t new_cap = dict->capacity;
-        while (new_cap < required) {
-            new_cap *= 2;
-        }
-        dict_resize(dict, new_cap);
-    }
-}
+// Dict<string, double>
+#define DICT_DEFINE_STR_DOUBLE(NAME) \
+    DICT_DEFINE(NAME, char*, double, dict_hash_str, dict_eq_str, dict_copy_str, dict_free_str)
 
-double dict_load_factor(Dict *dict) {
-    if (!dict || dict->capacity == 0) return 0.0;
-    return (double)dict->size / dict->capacity;
-}
+// Dict<string, float>
+#define DICT_DEFINE_STR_FLOAT(NAME) \
+    DICT_DEFINE(NAME, char*, float, dict_hash_str, dict_eq_str, dict_copy_str, dict_free_str)
 
-#endif // DICT_IMPLEMENTATION
+// Dict<string, void*>
+#define DICT_DEFINE_STR_PTR(NAME) \
+    DICT_DEFINE(NAME, char*, void*, dict_hash_str, dict_eq_str, dict_copy_str, dict_free_str)
+
+// Dict<int, int>
+#define DICT_DEFINE_INT_INT(NAME) \
+    DICT_DEFINE(NAME, int, int, dict_hash_int, dict_eq_int, dict_copy_val, dict_free_val)
+
+// Dict<int, string>
+#define DICT_DEFINE_INT_STR(NAME) \
+    DICT_DEFINE(NAME, int, char*, dict_hash_int, dict_eq_int, dict_copy_val, dict_free_val)
+
+// Dict<int, double>
+#define DICT_DEFINE_INT_DOUBLE(NAME) \
+    DICT_DEFINE(NAME, int, double, dict_hash_int, dict_eq_int, dict_copy_val, dict_free_val)
+
+// Dict<int, void*>
+#define DICT_DEFINE_INT_PTR(NAME) \
+    DICT_DEFINE(NAME, int, void*, dict_hash_int, dict_eq_int, dict_copy_val, dict_free_val)
+
+// Dict<uint32, int>
+#define DICT_DEFINE_UINT32_INT(NAME) \
+    DICT_DEFINE(NAME, uint32_t, int, dict_hash_uint32, dict_eq_uint32, dict_copy_val, dict_free_val)
+
+// Dict<uint32, void*>
+#define DICT_DEFINE_UINT32_PTR(NAME) \
+    DICT_DEFINE(NAME, uint32_t, void*, dict_hash_uint32, dict_eq_uint32, dict_copy_val, dict_free_val)
+
+// Dict<uint64, int>
+#define DICT_DEFINE_UINT64_INT(NAME) \
+    DICT_DEFINE(NAME, uint64_t, int, dict_hash_uint64, dict_eq_uint64, dict_copy_val, dict_free_val)
+
+// Dict<uint64, void*>
+#define DICT_DEFINE_UINT64_PTR(NAME) \
+    DICT_DEFINE(NAME, uint64_t, void*, dict_hash_uint64, dict_eq_uint64, dict_copy_val, dict_free_val)
+
+// Dict<ptr, int>
+#define DICT_DEFINE_PTR_INT(NAME) \
+    DICT_DEFINE(NAME, void*, int, dict_hash_ptr, dict_eq_ptr, dict_copy_val, dict_free_val)
+
+// Dict<ptr, void*>
+#define DICT_DEFINE_PTR_PTR(NAME) \
+    DICT_DEFINE(NAME, void*, void*, dict_hash_ptr, dict_eq_ptr, dict_copy_val, dict_free_val)
 
 #ifdef __cplusplus
 }
